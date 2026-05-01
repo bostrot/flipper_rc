@@ -258,6 +258,27 @@ The `toggle` parameter can be 0 or 1 and is optional. It helps to distinguish be
 
 - **ac**: Some air conditioners use this protocol (at least Gorenie and MDV). Usually 16-bit command contains 4-bit mode, 4-bit fan speed, 4-bit temperature and some other bits. Requires `addr` and `cmd`.
 
+- **midea**: Midea-family AC protocol (48-bit). Used by Midea-OEM rebranders such as Pioneer System, Comfee, Kaysun, Trotec, Lennox, EAS Electric, MDV, and many no-name Chinese splits. State frames use vendor marker `0xB2` and contain two payload bytes `a` (mode/fan/power) and `b` (temperature/mode), plus inverse copies of all three; some toggle/special button commands use vendor marker `0xB5` instead. The `auto-decode` step picks `midea` over `ac` whenever the vendor byte equals `0xB2` or `0xB5`.
+
+  **Three parameter forms** are supported (mutually exclusive):
+
+  - **Byte-level** (`a`, `b`, optional `pa`/`pb` preamble):
+    - `midea:a=0x7B,b=0xE0` — fixed "Power off" magic value.
+    - `midea:a=0xBF,b=0x70` — Cool 22°C, fan auto.
+    - `midea:a=0xBF,b=0x70,pa=0xE0,pb=0x03` — same with the Sleep-mode preamble.
+
+  - **Field-level** (human-readable; auto-derives `a`/`b` from the empirical Midea field map):
+    - `midea:mode=cool,temp=22,fan=auto` — defaults: `power=on`. Modes: `cool`, `heat`, `auto`, `dry`, `fan`. Temps: 17–30°C. Fans: `auto`, `low`, `med`, `high`. In `auto` and `dry` modes the AC controls the fan and the user's `fan` value is ignored. In `fan` mode the user's `temp` is ignored.
+    - `midea:power=off` — power off shortcut (returns the magic bytes).
+    - `midea:mode=cool,temp=22,sleep=on` — same as above but with the standard sleep preamble (`pa=0xE0,pb=0x03`).
+
+  - **Button-level** (toggle/special commands that don't carry mode/temp state):
+    - `midea:button=swing` — toggle vertical swing.
+    - `midea:button=turbo` — turbo cooling/heating for ~10 minutes, then returns to previous state.
+    - `midea:button=led` — toggle the indoor unit's display panel and beep.
+
+  Field semantics were derived empirically from EAS Electric EADVA25NT2 captures and matched against the IRremoteESP8266 4-bit Gray-coded temperature table. They should work for any Midea-OEM 48-bit-variant remote, but if your AC ignores the field-level command, capture the raw bytes via `remote.learn_command` and use the byte-level form. Button commands use a second vendor byte (`0xB5` instead of `0xB2`) for turbo and led; auto-decode reports them as `midea:button=...`.
+
 
 ## Sub-GHz Code Formatting
 
